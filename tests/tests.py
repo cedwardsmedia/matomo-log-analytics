@@ -734,7 +734,7 @@ def test_incapsulaw3c_parsing():
     assert hits[0]['extension'] == 'php'
     assert hits[0]['is_download'] == False
     assert hits[0]['referrer'] == u''
-    assert hits[0]['args'] == {}
+    assert hits[0]['args'] == {'cvar': {1: ['HTTP-method', u'"GET"']}}
     assert hits[0]['length'] == 10117
     assert hits[0]['generation_time_milli'] == 0
     assert hits[0]['host'] == 'www.example.com'
@@ -755,7 +755,7 @@ def test_incapsulaw3c_parsing():
     assert hits[1]['extension'] == '/rss/news'
     assert hits[1]['is_download'] == False
     assert hits[1]['referrer'] == u''
-    assert hits[1]['args'] == {}
+    assert hits[0]['args'] == {'cvar': {1: ['HTTP-method', u'"GET"']}}
     assert hits[1]['length'] == 0
     assert hits[1]['generation_time_milli'] == 0
     assert hits[1]['host'] == 'www.example.com'
@@ -772,8 +772,6 @@ def test_incapsulaw3c_parsing():
 
     assert len(hits) == 2
 
-    import_logs.config.options.log_hostname = 'foo'
-
 def test_amazon_cloudfront_rtmp_parsing():
     """test parsing of amazon cloudfront rtmp logs (which use extended W3C log format w/ custom fields for event info)"""
 
@@ -785,6 +783,7 @@ def test_amazon_cloudfront_rtmp_parsing():
     import_logs.parser = import_logs.Parser()
     import_logs.config.format = None
     import_logs.config.options.enable_http_redirects = True
+    import_logs.config.options.log_hostname = 'foo'
     import_logs.config.options.enable_http_errors = True
     import_logs.config.options.replay_tracking = False
     import_logs.config.options.w3c_time_taken_in_millisecs = False
