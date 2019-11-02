@@ -3,6 +3,7 @@ import functools
 import os
 import datetime
 import re
+import json
 
 import import_logs
 
@@ -192,6 +193,8 @@ class Options(object):
     exclude_older_than = None
     exclude_newer_than = None
     track_http_method = True
+    seconds_to_add_to_date = 0
+    request_suffix = None
 
 class Config(object):
     """Mock configuration."""
@@ -685,7 +688,7 @@ def test_amazon_cloudfront_web_parsing():
     assert hits[0]['is_error'] == False
     assert hits[0]['extension'] == u'html'
     assert hits[0]['is_download'] == False
-    assert hits[0]['referrer'] == u'www.displaymyfiles.com'
+    assert hits[0]['referrer'] == u'https://example.com/'
     assert hits[0]['args'] == {'cvar': {1: ['HTTP-method', 'GET']}}
     assert hits[0]['generation_time_milli'] == 1.0
     assert hits[0]['host'] == 'foo'
@@ -698,7 +701,7 @@ def test_amazon_cloudfront_web_parsing():
     assert hits[0]['path'] == u'/view/my/file.html'
     assert hits[0]['is_robot'] == False
     assert hits[0]['full_path'] == u'/view/my/file.html'
-    assert hits[0]['user_agent'] == u'Mozilla/4.0 (compatible; MSIE 5.0b1; Mac_PowerPC)'
+    assert hits[0]['user_agent'] == u'Mozilla/5.0 (Windows; U; Windows NT 6.1; de-DE) AppleWebKit/534.17 (KHTML, like Gecko) Chrome/10.0.649.0 Safari/534.17'
 
     assert len(hits) == 1
 
@@ -928,3 +931,66 @@ def test_custom_log_date_format_option():
     hits = [hit.__dict__ for hit in Recorder.recorders]
 
     assert hits[0]['date'] == datetime.datetime(2012, 2, 10, 16, 42, 7)
+
+def test_static_ignores():
+    """Test static files are ignored."""
+    file_ = 'logs/static_ignores.log'
+
+    import_logs.config.options.custom_w3c_fields = {}
+    Recorder.recorders = []
+    import_logs.parser = import_logs.Parser()
+    import_logs.config.format = None
+    import_logs.config.options.enable_static = False
+    import_logs.config.options.download_extensions = 'txt,doc'  # ensure robots.txt would be imported if not detected as static
+    import_logs.config.options.enable_http_redirects = True
+    import_logs.config.options.enable_http_errors = True
+    import_logs.config.options.replay_tracking = False
+    import_logs.config.options.w3c_time_taken_in_millisecs = False
+    import_logs.parser.parse(file_)
+
+    hits = [hit.args for hit in import_logs.Recorder.recorders]
+
+    assert len(hits) == 1
+
+# UrlHelper tests
+def test_urlhelper_convert_array_args():
+    def _test(input, expected):
+        actual = import_logs.UrlHelper.convert_array_args(input)
+        assert json.dumps(actual) == json.dumps(expected)
+
+    f = functools.partial(_test, {'abc': 'def', 'ghi': 23}, {'abc': 'def', 'ghi': 23})
+    f.description = 'without array args'
+    yield f
+
+    f = functools.partial(_test, {'abc[]': 'def', 'ghi': 23}, {'abc': ['def'], 'ghi': 23})
+    f.description = 'with normal array args'
+    yield f
+
+    f = functools.partial(_test, {'abc[key1]': 'def', 'ghi[0]': 23, 'abc[key2]': 'val2', 'abc[key3][key4]': 'val3'},
+        {'abc': {'key1': 'def', 'key2': 'val2', 'key3': {'key4': 'val3'}}, 'ghi': [23]})
+    f.description = 'with associative array args'
+    yield f
+
+    f = functools.partial(_test, {'abc[0]': 1, 'abc[2]': 2, 'abc[1]': 3, 'ghi[0]': 4, 'ghi[2]': 5}, {'abc': [1, 3, 2], 'ghi': {'0': 4, '2': 5}})
+    f.description = 'with array index keys'
+    yield f
+
+    f = functools.partial(_test, {'abc[key1][0]': 'def', 'abc[key1][1]': 'ghi', 'abc[key2][4]': 'hij'}, {'abc': {'key1': ['def', 'ghi'], 'key2': {4: 'hij'}}})
+    f.description = 'with both associative & normal arrays'
+    yield f
+
+    f = functools.partial(_test, {'abc[key1][3]': 1, 'abc[key1][]': 23, 'ghi[key2][]': 45, 'ghi[key2][abc]': 56}, {'abc': {'key1': [23]}, 'ghi': {'key2': {'abc': 56}}})
+    f.description = 'with multiple inconsistent data strucutres'
+    yield f
+
+# Matomo error test
+def test_matomo_error_construct():
+    """Test that Matomo exception can be created."""
+
+    try:
+        raise import_logs.Matomo.Error('test message', 120)
+
+        assert false
+    except import_logs.Matomo.Error as e:
+        assert e.code == 120
+        assert e.message == 'test message'
